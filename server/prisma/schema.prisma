@@ -1,0 +1,201 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         String    @default("USER") // "USER" | "ADMIN"
+  phone        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  bookings     Booking[]
+  reviews      Review[]
+  seatLocks    SeatLock[]
+}
+
+model Movie {
+  id           String    @id @default(uuid())
+  title        String
+  synopsis     String
+  posterUrl    String
+  backdropUrl  String
+  trailerUrl   String
+  duration     Int       // in minutes
+  genre        String    // e.g. "Sci-Fi, Action, Adventure"
+  language     String    // e.g. "English", "Hindi"
+  rating       Float     @default(8.5)
+  releaseDate  String
+  ageRating    String    @default("PG-13")
+  director     String
+  cast         String
+  isFeatured   Boolean   @default(false)
+  isTrending   Boolean   @default(false)
+  isNowShowing Boolean   @default(true)
+  shows        Show[]
+  reviews      Review[]
+  createdAt    DateTime  @default(now())
+}
+
+model Cinema {
+  id          String       @id @default(uuid())
+  name        String
+  city        String
+  address     String
+  facilities  String       // JSON or comma separated e.g. "IMAX, 4DX, Dolby Atmos, Valet Parking"
+  imageUrl    String
+  auditoriums Auditorium[]
+  createdAt   DateTime     @default(now())
+}
+
+model Auditorium {
+  id          String   @id @default(uuid())
+  cinemaId    String
+  cinema      Cinema   @relation(fields: [cinemaId], references: [id], onDelete: Cascade)
+  name        String   // "Screen 1 - IMAX Grand", "Screen 2 - Dolby Cinema"
+  screenType  String   // "IMAX 3D Laser", "Dolby Atmos 4K", "RealD 3D"
+  soundSystem String   // "Dolby Atmos 128 Channel", "IMAX 12.1"
+  totalRows   Int      @default(10)
+  totalCols   Int      @default(16)
+  seats       Seat[]
+  shows       Show[]
+}
+
+model SeatCategory {
+  id          String  @id @default(uuid())
+  name        String  @unique // "Silver", "Gold", "Platinum", "Recliner", "VIP"
+  basePrice   Float
+  color       String  // hex color
+  description String
+  seats       Seat[]
+}
+
+model Seat {
+  id           String       @id @default(uuid())
+  auditoriumId String
+  auditorium   Auditorium   @relation(fields: [auditoriumId], references: [id], onDelete: Cascade)
+  seatNumber   String       // e.g. "G8"
+  row          String       // e.g. "G"
+  col          Int          // e.g. 8
+  categoryId   String
+  category     SeatCategory @relation(fields: [categoryId], references: [id])
+  coordX       Float        // 3D position X
+  coordY       Float        // 3D position Y (elevation)
+  coordZ       Float        // 3D position Z (distance from screen)
+  showSeats    ShowSeat[]
+  bookingSeats BookingSeat[]
+  seatLocks    SeatLock[]
+
+  @@unique([auditoriumId, seatNumber])
+}
+
+model Show {
+  id                  String       @id @default(uuid())
+  movieId             String
+  movie               Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  auditoriumId        String
+  auditorium          Auditorium   @relation(fields: [auditoriumId], references: [id], onDelete: Cascade)
+  date                String       // YYYY-MM-DD
+  startTime           String       // "19:30"
+  endTime             String       // "22:15"
+  basePriceMultiplier Float        @default(1.0)
+  showSeats           ShowSeat[]
+  bookings            Booking[]
+  seatLocks           SeatLock[]
+  createdAt           DateTime     @default(now())
+}
+
+model ShowSeat {
+  id        String   @id @default(uuid())
+  showId    String
+  show      Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
+  seatId    String
+  seat      Seat     @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  status    String   @default("AVAILABLE") // "AVAILABLE" | "LOCKED" | "BOOKED"
+  price     Float
+  updatedAt DateTime @updatedAt
+
+  @@unique([showId, seatId])
+}
+
+model SeatLock {
+  id        String   @id @default(uuid())
+  showId    String
+  show      Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
+  seatId    String
+  seat      Seat     @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String   // allows guest locks or socket/session based locks
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([showId, seatId])
+}
+
+model Booking {
+  id           String        @id @default(uuid())
+  bookingRef   String        @unique // e.g. "CV-2026-X98A"
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  showId       String
+  show         Show          @relation(fields: [showId], references: [id])
+  totalAmount  Float
+  status       String        @default("PENDING") // "PENDING" | "CONFIRMED" | "CANCELLED"
+  paymentId    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  bookingSeats BookingSeat[]
+  payment      Payment?
+  ticket       Ticket?
+}
+
+model BookingSeat {
+  id        String  @id @default(uuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  seatId    String
+  seat      Seat    @relation(fields: [seatId], references: [id])
+  price     Float
+}
+
+model Payment {
+  id                String   @id @default(uuid())
+  bookingId         String   @unique
+  booking           Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  razorpayOrderId   String   @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  amount            Float
+  currency          String   @default("INR")
+  status            String   @default("CREATED") // "CREATED" | "PAID" | "FAILED"
+  method            String?  @default("UPI/CARD")
+  createdAt         DateTime @default(now())
+}
+
+model Ticket {
+  id          String   @id @default(uuid())
+  bookingId   String   @unique
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  ticketCode  String   @unique // e.g. "TKT-8849-5912"
+  qrCodeData  String   // QR payload
+  generatedAt DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  movieId   String
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Float
+  comment   String
+  createdAt DateTime @default(now())
+}

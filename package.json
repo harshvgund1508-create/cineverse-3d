@@ -1,0 +1,13 @@
+{
+  "name": "cineverse-3d",
+  "version": "1.0.0",
+  "description": "CineVerse 3D - Don't Just Book Your Seat. Experience Your View.",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "seed": "npm run seed --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
